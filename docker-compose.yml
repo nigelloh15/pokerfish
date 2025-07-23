@@ -1,0 +1,20 @@
+services:
+  backend:
+    image: pokerfish-backend
+    pull_policy: never
+    container_name: pokerfish-backend
+    build:
+      context: ./backend
+      dockerfile: dockerfile
+    ports:
+      - 8000:8000
+
+  frontend:
+    image: pokerfish-frontend
+    pull_policy: never
+    container_name: pokerfish-frontend
+    build:
+      context: ./frontend
+      dockerfile: dockerfile
+    ports:
+      - 80:80
