@@ -1,35 +1,17 @@
-import { useState } from "react";
-
-type Response = {
-  name: string;
-  value: number;
-}
-
 
 function App() {
 
-  const [name, setName] = useState<string>("");
-
-  async function testBackend() {
-    const response = await fetch('http://localhost:8000/test');
-    const data = await response.json() as Response;
-    setName(data.name);
-  }
-
   return (
-    <>
-      <div>
-        Here
+    <div className="w-screen h-screen flex flex-col justify-center items-center">
+      <div className="text-[10vw] font-playfair">
+        PokerFish
       </div>
-      <button className="bg-red-500 text-white" onClick={testBackend}>
-        test
-      </button>
-      {name && (
-        <div className="text-2xl">
-          {name}
-        </div>
-      )}
-    </>
+      <a href="/play">
+        <button className="text-[2vw] rounded-[2vw] w-[10vw] cursor-pointer">
+          PLAY
+        </button>
+      </a>
+    </div>
   )
 }
 

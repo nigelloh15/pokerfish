@@ -10,6 +10,10 @@ export default defineConfig({
   ],
   build: { assetsDir: '.', // Output assets directly into the root of dist/
       rollupOptions: {
+        input: {
+          main: 'index.html', // Main entry point
+          play: 'play.html', // Play entry point
+        },
         output: {
           assetFileNames: '[name].[ext]',    // No hash
           chunkFileNames: '[name].js',       // No hash
