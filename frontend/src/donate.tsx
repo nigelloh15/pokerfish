@@ -1,10 +1,10 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
-import Join from './play/join.tsx'
+import Money from './donate/money'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <Join />
+    <Money />
   </StrictMode>,
 )
