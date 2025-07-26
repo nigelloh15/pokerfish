@@ -17,7 +17,6 @@ app.add_middleware(
 class ConnectionManager:
     def __init__(self):
         self.rooms: Dict[str, List[Tuple[WebSocket, str]]] = {}
-        self.leaders: Dict[str, str] = {}  # room_code -> leader_name
 
     async def connect(self, websocket: WebSocket, room: str, name: str):
         await websocket.accept()
@@ -28,9 +27,6 @@ class ConnectionManager:
         if name in [name for _, name in self.rooms[room]]:
             await websocket.close(code=1008, reason="Name already taken in this room")
             return
-
-        if self.rooms[room] == []:
-            self.leaders[room] = name
 
         self.rooms[room].append((websocket, name))
         await self.broadcast_room_update(room)
@@ -60,7 +56,10 @@ class ConnectionManager:
 
     async def broadcast_room_update(self, room: str):
         names = [name for _, name in self.rooms[room]]
-        leader = self.leaders.get(room)
+        if self.rooms[room]:
+            leader = self.rooms[room][0][1]
+        else:
+            leader = None
         message = json.dumps({"type": "room_update", "users": names, "leader": leader})
         for websocket, _ in self.rooms[room]:
             await websocket.send_text(message)
