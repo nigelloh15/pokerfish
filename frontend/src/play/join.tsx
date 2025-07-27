@@ -1,17 +1,21 @@
 import { useState, useRef } from "react";
 import JoinForm from "./components/joinform";
 import RoomLobby from "./components/roomlobby";
+import Game from "./components/game";
 
 export default function Join() {
 
   const [connected, setConnected] = useState(false);
   const [roomCode, setRoomCode] = useState("");
-  const [name, setName] = useState("");
   const [users, setUsers] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [leader, setLeader] = useState("");
+  const [name, setName] = useState("");
+  const [gameStarted, setGameStarted] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
   const roomCodeRef = useRef<HTMLInputElement>(null);
+
+  const websocket = useRef<WebSocket | null>(null);
 
   const handleCreateRoom = async () => {
     // Logic to create a room
@@ -43,7 +47,7 @@ export default function Join() {
     // Logic to connect to a room
 
     if (nameRef.current && nameRef.current.value) {
-      setName(nameRef.current?.value);
+      setName(nameRef.current.value);
     }
     else {
       setError("Name is required");
@@ -56,6 +60,7 @@ export default function Join() {
       console.log("Connected to room:", room);
       setRoomCode(room);
       setConnected(true);
+      websocket.current = ws; // Store the WebSocket instance
     };
 
     ws.onmessage = (event) => {
@@ -64,6 +69,10 @@ export default function Join() {
       if (message.type === "room_update") {
         setUsers(message.users);
         setLeader(message.leader);
+      }
+
+      if (message.type === "start_game") {
+        setGameStarted(true);
       }
 
       console.log("Message from server:", message);
@@ -81,9 +90,15 @@ export default function Join() {
 
   const isLeader = leader === name;
 
-  if (connected) {
+  if (gameStarted) {
     return (
-      <RoomLobby roomCode={roomCode} users={users} isLeader={isLeader}/>
+      <Game />
+    );
+  }
+
+  else if (connected && websocket.current) {
+    return (
+      <RoomLobby roomCode={roomCode} users={users} isLeader={isLeader} ws={websocket.current}/>
     );
   }
 
