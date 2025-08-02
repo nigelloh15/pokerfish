@@ -70,8 +70,16 @@ class ConnectionManager:
             return
 
         state.players = [player for player in state.players if player.name != name]
-        await self.save_state_to_redis(room, state)
-        await self.broadcast_room_update(room)
+        if state.leader == name:
+            if len(state.players) > 0:
+                state.leader = state.players[0].name
+                print(state.leader)
+        if not state.players:
+            await self.delete_room(room)
+            return
+        else:
+            await self.save_state_to_redis(room, state)
+            await self.broadcast_room_update(room)
 
     async def create_room(self) -> Dict[str, str]:
         while True:
@@ -100,7 +108,11 @@ class ConnectionManager:
 
         names = [self.websockets[ws]["name"] for ws in self.rooms[room]]
         state = await self.load_state_from_redis(room)
-        leader = state.leader if state and state.leader else None
+        if state:
+            leader = state.leader
+            print(leader)
+        else:
+            leader = None
 
         message = {
             "type": "room_update",
