@@ -7,8 +7,8 @@ router = APIRouter()
 manager = ConnectionManager()
 
 @router.get("/create-room")
-def create_room():
-    return manager.create_room()
+async def create_room():
+    return await manager.create_room()
 
 @router.websocket("/ws/{room}/{name}")
 async def websocket_endpoint(websocket: WebSocket, room: str, name: str):
@@ -21,4 +21,4 @@ async def websocket_endpoint(websocket: WebSocket, room: str, name: str):
             await handle_input(message, manager, room, name)
 
     except WebSocketDisconnect:
-        await manager.disconnect(websocket, room, name)
+        await manager.disconnect(websocket)
