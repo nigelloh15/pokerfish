@@ -87,7 +87,7 @@ class ConnectionManager:
             res = await redis_client.get(f"game_state:{code}")
             if res is None:
                 state = GameState()
-                await redis_client.set(f"game_state:{code}", state.model_dump_json())
+                await self.save_state_to_redis(code, state)
                 self.rooms[code] = []
                 return {"room_code": code}
 
@@ -134,7 +134,7 @@ class ConnectionManager:
         return state.model_dump() if state else None
 
     async def save_state_to_redis(self, room: str, state: GameState):
-        await redis_client.set(f"game_state:{room}", state.model_dump_json())
+        await redis_client.set(f"game_state:{room}", state.model_dump_json(), ex=86400)
 
     async def load_state_from_redis(self, room: str) -> Optional[GameState]:
         state_json = await redis_client.get(f"game_state:{room}")
