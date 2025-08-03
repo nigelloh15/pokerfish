@@ -1,12 +1,21 @@
-from redis import Redis
+from typing import Optional
+from redis.asyncio import Redis
 
-redis_client: Redis | None = None
+redis_client: Redis
 
-def connect_to_redis():
+async def connect_to_redis() -> Redis:
     global redis_client
     redis_client = Redis(host='localhost', port=6379, db=0, decode_responses=True)
 
-def close_redis_connection():
+    try:
+        await redis_client.ping()
+    except Exception as e:
+        raise RuntimeError(f"Failed to connect to Redis: {e}")
+
+    return redis_client
+
+async def close_redis_connection():
     global redis_client
     if redis_client:
-        redis_client.close()
+        await redis_client.close()
+

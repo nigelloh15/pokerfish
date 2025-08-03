@@ -1,10 +1,12 @@
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from fastapi import WebSocket
 from pydantic import BaseModel
-import json, random, string
 from redis.asyncio import Redis
+import json, string, random
+import asyncio
 
-redis_client = Redis(host='localhost', port=6379, db=0, decode_responses=True)
+numbers = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
+suits = ["♠", "♥", "♦", "♣"]
 
 class PlayerState(BaseModel):
     name: str
@@ -12,7 +14,7 @@ class PlayerState(BaseModel):
     bet: int
     folded: bool
     is_turn: bool
-    hand: Optional[List[str]] = None
+    hand: Optional[Tuple[Tuple[str, str], Tuple[str, str]]] = None
 
 class GameState(BaseModel):
     players: List[PlayerState] = []
@@ -26,9 +28,11 @@ class GameState(BaseModel):
     game_started: bool = False
 
 class ConnectionManager:
-    def __init__(self):
+    def __init__(self, redis: Redis):
         self.websockets: Dict[WebSocket, Dict[str, str]] = {}
         self.rooms: Dict[str, List[WebSocket]] = {}
+        self.pubsub: Dict[str, asyncio.Task] = {}
+        self.redis = redis
 
     async def connect(self, websocket: WebSocket, room: str, name: str):
         await websocket.accept()
@@ -47,7 +51,10 @@ class ConnectionManager:
             self.rooms[room] = []
         self.rooms[room].append(websocket)
 
-        state.players.append(PlayerState(name=name, chips=1000, bet=0, folded=False, is_turn=False))
+        if room not in self.pubsub:
+            self.pubsub[room] = asyncio.create_task(self.listen_to_room(room))
+
+        state.players.append(PlayerState(name=name, chips=1000, bet=0, folded=False, is_turn=False, hand=((numbers[0], suits[0]), (numbers[0], suits[1]))))
         if state.leader is None:
             state.leader = name
 
@@ -76,6 +83,8 @@ class ConnectionManager:
                 print(state.leader)
         if not state.players:
             await self.delete_room(room)
+            self.pubsub[room].cancel()
+            del self.pubsub[room]
             return
         else:
             await self.save_state_to_redis(room, state)
@@ -84,7 +93,7 @@ class ConnectionManager:
     async def create_room(self) -> Dict[str, str]:
         while True:
             code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
-            res = await redis_client.get(f"game_state:{code}")
+            res = await self.redis.get(f"game_state:{code}")
             if res is None:
                 state = GameState()
                 await self.save_state_to_redis(code, state)
@@ -92,7 +101,7 @@ class ConnectionManager:
                 return {"room_code": code}
 
     async def delete_room(self, room: str):
-        await redis_client.delete(f"game_state:{room}")
+        await self.redis.delete(f"game_state:{room}")
         if room in self.rooms:
             del self.rooms[room]
 
@@ -106,20 +115,37 @@ class ConnectionManager:
         if room not in self.rooms:
             return
 
-        names = [self.websockets[ws]["name"] for ws in self.rooms[room]]
         state = await self.load_state_from_redis(room)
         if state:
-            leader = state.leader
-            print(leader)
+            await self.broadcast(state.model_dump(), room)
         else:
-            leader = None
+            print(f"Error: Game state for room {room} not found")
 
-        message = {
-            "type": "room_update",
-            "users": names,
-            "leader": leader
-        }
-        await self.broadcast(message, room)
+    async def listen_to_room(self, room:str):
+        pubsub = self.redis.pubsub()
+        await pubsub.subscribe(f"game_state:{room}")
+
+        print(f"Listening to room {room} for updates...")
+
+        try:
+
+            while True:
+                msg = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1)
+                if msg and msg['type'] == 'message':
+                    try:
+                        data = json.loads(msg['data'])
+                        await self.broadcast(data, room)
+                    except Exception as e:
+                        print(f"Error processing message in room {room}: {e}")
+
+        except asyncio.CancelledError:
+
+            print(f"Stopped listening to room {room}")
+            await pubsub.unsubscribe(f"game_state:{room}")
+            await pubsub.close()
+
+    async def publish_to_room(self, room: str, state: GameState):
+        await self.redis.publish(f"game_state:{room}", state.model_dump_json())
 
     async def start_game(self, room: str):
         state = await self.load_state_from_redis(room)
@@ -127,17 +153,17 @@ class ConnectionManager:
             return
         state.game_started = True
         await self.save_state_to_redis(room, state)
-        await self.broadcast({"type": "start_game"}, room)
+        await self.broadcast(state.model_dump(), room)
 
     async def get_state(self, room: str) -> Optional[dict]:
         state = await self.load_state_from_redis(room)
         return state.model_dump() if state else None
 
     async def save_state_to_redis(self, room: str, state: GameState):
-        await redis_client.set(f"game_state:{room}", state.model_dump_json(), ex=86400)
+        await self.redis.set(f"game_state:{room}", state.model_dump_json(), ex=86400)
 
     async def load_state_from_redis(self, room: str) -> Optional[GameState]:
-        state_json = await redis_client.get(f"game_state:{room}")
+        state_json = await self.redis.get(f"game_state:{room}")
         if state_json:
             return GameState.model_validate_json(state_json)
         return None

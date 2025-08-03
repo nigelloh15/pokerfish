@@ -3,8 +3,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.pokerfish.core.manager import ConnectionManager
 from src.pokerfish.routes.websocket import router as websocket_router
 from src.pokerfish.db.redis import connect_to_redis, close_redis_connection
+from contextlib import asynccontextmanager
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # ✅ Startup logic
+    redis = await connect_to_redis() 
+    app.state.manager = ConnectionManager(redis)
+    yield  # 🔁 App runs here
+
+    # ✅ Shutdown logic
+    await close_redis_connection()
+    print("🔌 Redis closed")
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -13,18 +25,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-manager = ConnectionManager()
-
-@app.on_event("startup")
-def startup_event():
-    connect_to_redis()
-    print("Connected to Redis")
-
-@app.on_event("shutdown")
-def shutdown_event():
-    close_redis_connection()
-    print("Closed Redis connection")
 
 @app.get("/")
 def root():
