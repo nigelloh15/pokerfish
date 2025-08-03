@@ -3,17 +3,38 @@ import JoinForm from "./components/joinform";
 import RoomLobby from "./components/roomlobby";
 import Game from "./components/game";
 
+
+export interface PlayerState {
+  name: string;
+  chips: number;
+  bet: number;
+  folded: boolean;
+  is_turn: boolean;
+  hand: string[]; 
+}
+
+export interface GameState {
+  players: PlayerState[];
+  leader: string;              
+  community_cards: string[];
+  pot: number;
+  round: string;               // e.g., "pre-flop", "flop", etc.
+  dealer_index: number;
+  current_turn_index: number;
+  min_bet: number;
+  game_started: boolean;
+}
+
 export default function Join() {
 
   const [connected, setConnected] = useState(false);
   const [roomCode, setRoomCode] = useState("");
-  const [users, setUsers] = useState<string[]>([]);
   const [error, setError] = useState("");
-  const [leader, setLeader] = useState("");
   const [name, setName] = useState("");
-  const [gameStarted, setGameStarted] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
   const roomCodeRef = useRef<HTMLInputElement>(null);
+
+  const [state, setState] = useState<GameState>();
 
   const websocket = useRef<WebSocket | null>(null);
 
@@ -39,7 +60,7 @@ export default function Join() {
       return;
     }
 
-    const room = roomCodeRef.current.value;
+    const room = roomCodeRef.current.value.toUpperCase();
     await connectToRoom(room);
   }
 
@@ -64,15 +85,12 @@ export default function Join() {
     };
 
     ws.onmessage = (event) => {
-      const message = JSON.parse(event.data);
+      const message: GameState = JSON.parse(event.data);
 
-      if (message.type === "room_update") {
-        setUsers(message.users);
-        setLeader(message.leader);
-      }
-
-      if (message.type === "start_game") {
-        setGameStarted(true);
+      const players = message.players.map(player => player.name);
+      
+      if (message != state) {
+        setState(message);
       }
 
       console.log("Message from server:", message);
@@ -88,17 +106,19 @@ export default function Join() {
     }
   }
 
-  const isLeader = leader === name;
+  const isLeader = state?.leader === name;
+  const players = state?.players.map(player => player.name) || []
+  const gameStarted = state?.game_started || false;
 
-  if (gameStarted) {
+  if (gameStarted && state && websocket.current) {
     return (
-      <Game />
+      <Game ws={websocket.current} gamestate={state} name={name} />
     );
   }
 
   else if (connected && websocket.current) {
     return (
-      <RoomLobby roomCode={roomCode} users={users} isLeader={isLeader} ws={websocket.current}/>
+      <RoomLobby roomCode={roomCode} users={players} isLeader={isLeader} ws={websocket.current} />
     );
   }
 

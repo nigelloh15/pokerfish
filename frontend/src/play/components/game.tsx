@@ -1,16 +1,14 @@
 import Player from "./player";
 import Card from "./card";
+import type { GameState, PlayerState } from "../join";
 
 interface GameProps {
   ws: WebSocket;  
-  players: Array<{name: string, money: number, action: string}>;
-  communityCards: Array<{card: string, suit: string}>;
-  playerCards: Array<{card: string, suit: string}>;
-  currentPlayer: string;
-  pot: number;
+  gamestate: GameState;
+  name: string;
 }
 
-export default function Game({ ws, players, communityCards, playerCards, currentPlayer, pot }: GameProps) {
+export default function Game({ ws, gamestate, name }: GameProps) {
 
   const fold = () => {
     console.log("Fold action triggered");
@@ -21,16 +19,16 @@ export default function Game({ ws, players, communityCards, playerCards, current
   const raise = () => {
     console.log("Raise action triggered");
   }
+  
+  const player = gamestate.players.find(player => player.name === name);
 
   return (
-    <div className="flex flex-col w-screen h-screen justify-center">
+    <div className="flex flex-col min-w-screen min-h-screen justify-center">
       <div className="flex flex-col gap-[2vh]">
         <div className="players text-center flex flex-row justify-evenly items-center">
-          <Player name={"Player 1"} money={1000} action="Call"/>
-          <Player name={"Player 1"} money={1000} action="Call"/>
-          <Player name={"Player 1"} money={1000} action="Call"/>
-          <Player name={"Player 1"} money={1000} action="Call"/>
-          <Player name={"Player 1"} money={1000} action="Call"/>
+          {gamestate.players.map((player: PlayerState, index: number) => (
+            <Player key={index} name={player.name} money={1000} action="Call"/>
+          ))}
         </div>
         <div className="communitycards flex flex-row justify-center items-center gap-[2vw]">
           <Card card={"9"} suit="♥" />
@@ -40,8 +38,9 @@ export default function Game({ ws, players, communityCards, playerCards, current
           <Card card={"9"} suit="♣"/>
         </div>
         <div className="cards flex flex-row justify-center items-center gap-[2vw]">
-          <Card card={"9"} suit="♥" />
-          <Card card={"9"} suit="♠"/>
+          {player?.hand.map((card, index) => (
+            <Card key={index} card={card[0]} suit={card[1]}/>
+          ))}
         </div>
         <div className="money flex justify-center items-center">
           <div>
